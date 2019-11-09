@@ -1,0 +1,4 @@
+String nota = "Mais de 8000";
+String maik = nota;
+String luan = nota;
+write("Aprovados");
