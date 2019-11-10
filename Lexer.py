@@ -6,9 +6,9 @@
 
 import sys
 
-from lexer.Ts import Ts
-from lexer.Tag import Tag
-from lexer.Token import Token
+from Ts import Ts
+from Tag import Tag
+from Token import Token
 
 
 class Lexer():

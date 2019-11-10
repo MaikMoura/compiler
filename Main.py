@@ -4,19 +4,17 @@
     *****
 '''
 
-from lexer.Tag import Tag
-from lexer.Token import Token
-from lexer.Lexer import Lexer
-from lexer.parser1 import Parser
+from Tag import Tag
+from Token import Token
+from Lexer import Lexer
+from parser1 import Parser
 
 if __name__ == "__main__":
-    lexer = Lexer('program.txt')
+    lexer = Lexer('HelloWorld.txt')
 
     parser = Parser(lexer)
 
     parser.Programa()
-
-    parser.lexer.closeFile()
 
     print('\n=>Lista de Tokens:')
     token = lexer.proximoToken()

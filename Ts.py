@@ -4,8 +4,8 @@
     *****
 '''
 
-from lexer.Tag import Tag
-from lexer.Token import Token
+from Tag import Tag
+from Token import Token
 
 
 class Ts:
