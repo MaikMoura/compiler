@@ -1,1 +1,1 @@
-class Maik: def void main (String [] Args): end;
+class Maik: defstatic void main (String [] Args): end; end.
