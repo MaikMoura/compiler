@@ -112,7 +112,7 @@ class Lexer():
                     lexema += c
                     estado = 25
                 elif (c == '"'):
-                    lexema += c
+                    #lexema += c
                     estado = 27
                 elif (c.isdigit()):
                     lexema += c
@@ -178,14 +178,8 @@ class Lexer():
                         self.ts.getToken(lexema).coluna = self.n_column
                     return token
             elif (estado == 27):
-                if (len(lexema) == 1 and c == '"'):
-                    self.sinalizarErroLexico('Caractere invalido [' + c + '] na linha ' +
-                                             str(self.n_line) + ' e coluna ' + str(self.n_column) +
-                                             ' String vazia nao permitido')
-                    lexema = ''
-                elif (len(lexema) > 1 and c == '"'):
+                if (len(lexema) > 0 and c == '"'):
                     # Estado 29
-                    lexema += c
                     return Token(Tag.STRING, lexema, self.n_line, self.n_column)
                 elif (c == '\n'):
                     self.sinalizarErroLexico('Caractere invalido [' + c + '] na linha ' +
@@ -195,8 +189,14 @@ class Lexer():
                     self.n_column = 0
                 elif (c == ''):
                     self.sinalizarErroLexico('Caractere invalido [' + c + '] na linha ' +
-                                            str(self.n_line) + ' e coluna ' + str(self.n_column)
-                                            + ' EOF encontrado antes de fechar String')
+                                             str(self.n_line) + ' e coluna ' + str(self.n_column)
+                                             + ' EOF encontrado antes de fechar String')
+                elif (len(lexema) == 0 and c == '"'):
+                    self.sinalizarErroLexico('Caractere invalido [' + c + '] na linha ' +
+                                             str(self.n_line) + ' e coluna ' + str(self.n_column) +
+                                             ' String vazia nao permitido')
+                    lexema = ''
+                    estado = 1
                 else:
                     lexema += c
             elif (estado == 30):

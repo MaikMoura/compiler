@@ -61,9 +61,14 @@ class Tag(Enum):
     #Numeros
     INT = 43
     DOUBLE = 44
+    NUMERICO = 45
+    LOGICO = 46
 
     #String
-    STRING = 45
+    STRING = 47
 
     #Erro
-    ERROR = 46
+    ERROR = 48
+
+    #VAZIO
+    TIPO_VAZIO = 49
