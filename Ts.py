@@ -40,6 +40,15 @@ class Ts:
     def addToken(self, lexema, token):
         self.ts[lexema] = token
 
+    def removeToken(self, lexema):
+        self.ts.pop(lexema)
+
     def printTs(self):
         for k, t in (self.ts.items()):
             print('{}: {}'.format(k, t.toString()))
+
+    def setTipo(self, lexema, tipo):
+        self.getToken(lexema).setTipo(tipo)
+
+    def getTipo(self, lexema):
+        return self.getToken(lexema).getTipo()

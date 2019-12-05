@@ -44,6 +44,9 @@ class Lexer():
             self.file.seek(self.file.tell() - 1)
             self.n_column -= 1
 
+    def getTs(self):
+        return self.ts
+
     def imprimirTs(self):
         self.ts.printTs()
 

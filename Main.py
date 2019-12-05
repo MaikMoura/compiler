@@ -23,6 +23,7 @@ if __name__ == "__main__":
             print('{} , Linha: {} Coluna: {}'.format(token.toString(), str(token.getLinha()), str(token.getColuna())))
         token = lexer.proximoToken()
 
+
     print('\n=>Tabela de Simbolos:')
     lexer.imprimirTs()
     lexer.fecharArquivo()

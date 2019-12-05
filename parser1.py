@@ -1,6 +1,5 @@
 import sys
 
-from Ts import Ts
 from Tag import Tag
 from Token import Token
 from Lexer import Lexer
@@ -11,9 +10,14 @@ class Parser():
     def __init__(self, lexer):
         self.lexer = lexer
         self.token = lexer.proximoToken()
+        self.ts = self.lexer.getTs()
 
     def sinalizaErroSintatico(self, message):
         print('\n[Erro Sintatico] na linha ' + str(self.token.getLinha()) + ' e coluna ' + str(self.token.getColuna()) + ': ')
+        print(message, '\n')
+
+    def sinalizaErroSemantico(self, message):
+        print('\n[Erro Semantico] na linha ' + str(self.token.getLinha()) + ' e coluna ' + str(self.token.getColuna()) + ": ")
         print(message, '\n')
 
     def advance(self):
@@ -41,11 +45,12 @@ class Parser():
     def Classe(self):
         # Classe -> class ID : ListaFuncao Main end .
         if(self.eat(Tag.KW_CLASS)):
-            # TO DO
-            if (self.eat(Tag.ID)):
-                self.lexer.ts.getToken(self.token.getLexema()).setTipo(Tag.TIPO_VAZIO)
-            else:
+            tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
+
+            if (not self.eat(Tag.ID)):
                 self.sinalizaErroSintatico('Esperado "ID", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                self.ts.setTipo(tempToken.getLexema(), Tag.TIPO_VAZIO)
             if (not self.eat(Tag.KW_DBL_SCORE)):
                 self.sinalizaErroSintatico('Esperado ":", encontrado ' + '"' + self.token.getLexema() + '"')
             self.ListaFuncao()
@@ -60,10 +65,11 @@ class Parser():
     def DeclaraID(self):
         #DeclaraID -> TipoPrimitivo ID ;
         noTP = self.TipoPrimitivo()
-        if (self.eat(Tag.ID)):
-            self.lexer.ts.getToken(self.token.getLexema()).setTipo(Tag.TIPO_VAZIO)
-        else:
+        tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
+        if (not self.eat(Tag.ID)):
             self.sinalizaErroSintatico('Esperado "ID", encontrado ' + '"' + self.token.getLexema() + '"')
+        else:
+            self.ts.setTipo(tempToken.getLexema(), noTP.getTipo())
         if (not self.eat(Tag.KW_SCORE_COMMA)):
             self.sinalizaErroSintatico('Esperado ";", encontrado ' + '"' + self.token.getLexema() + '"')
 
@@ -82,9 +88,12 @@ class Parser():
     def Funcao(self):
         #Funcao -> def TipoPrimitivo ID ( ListaArg ) : RegexDeclaraId ListaCmd Retorno end ;
         if (self.eat(Tag.KW_DEF)):
-            self.TipoPrimitivo()
+            noTP = self.TipoPrimitivo()
+            tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
             if (not self.eat(Tag.ID)):
                 self.sinalizaErroSintatico('Esperado "ID", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                self.ts.setTipo(tempToken.getLexema(), noTP.getTipo())
             if (not self.eat(Tag.KW_OPN_PARENTH)):
                 self.sinalizaErroSintatico('Esperado "(", encontrado ' + '"' + self.token.getLexema() + '"')
             self.ListaArg()
@@ -94,7 +103,10 @@ class Parser():
                 self.sinalizaErroSintatico('Esperado ":", encontrado ' + '"' + self.token.getLexema() + '"')
             self.RegexDeclaraId()
             self.ListaCmd()
-            self.Retorno()
+
+            noReturn = self.Retorno()
+            if(noReturn.getTipo() != noTP.getTipo()):
+                self.sinalizaErroSemantico('Tipo de retorno incompativel')
             if (not self.eat(Tag.KW_END)):
                 self.sinalizaErroSintatico('Esperado "end", encontrado ' + '"' + self.token.getLexema() + '"')
             if (not self.eat(Tag.KW_SCORE_COMMA)):
@@ -123,20 +135,34 @@ class Parser():
             self.sinalizaErroSintatico('Esperado ",", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def Arg(self):
-        self.TipoPrimitivo()
+        noTP = self.TipoPrimitivo()
+        tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
         if (not self.eat(Tag.ID)):
             self.sinalizaErroSintatico('Esperado "ID", encontrado ' + '"' + self.token.getLexema() + '"')
+        else:
+            self.ts.setTipo(tempToken.getLexema(), noTP.getTipo())
 
     def Retorno(self):
+        noReturn = No()
         # Retorno -> return Expressao ;
         if (self.eat(Tag.KW_RETURN)):
-            self.Expressao()
-            if (not self.eat(Tag.KW_SCORE_COMMA)):
+            noExp = self.Expressao()
+            if (self.eat(Tag.KW_SCORE_COMMA)):
+                noReturn.setTipo(noExp.getTipo())
+                return noReturn
+            else:
                 self.sinalizaErroSintatico('Esperado ";", encontrado ' + '"' + self.token.getLexema() + '"')
-        elif (self.token.getNome() != Tag.KW_END):
+        elif (self.token.getNome() == Tag.KW_END):
+            noReturn.setTipo(Tag.TIPO_VAZIO)
+            return noReturn
+        else:
             self.sinalizaErroSintatico('Esperado "return", encontrado ' + '"' + self.token.getLexema() + '"')
+            noReturn.setTipo(Tag.ERROR)
+            return noReturn
+
 
     def Main(self):
+        tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
         # Main -> defstatic void main ( String [ ] ID ) : RegexDeclaraId ListaCmd end ;
         if (self.eat(Tag.KW_DEFSTATIC)):
             if (not self.eat(Tag.KW_VOID)):
@@ -153,6 +179,8 @@ class Parser():
                 self.sinalizaErroSintatico('Esperado "]", encontrado ' + '"' + self.token.getLexema() + '"')
             if (not self.eat(Tag.ID)):
                 self.sinalizaErroSintatico('Esperado "ID", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                self.ts.setTipo(tempToken.getLexema(), Tag.STRING)
             if (not self.eat(Tag.KW_CLS_PARENTH)):
                 self.sinalizaErroSintatico('Esperado ")", encontrado ' + '"' + self.token.getLexema() + '"')
             if (not self.eat(Tag.KW_DBL_SCORE)):
@@ -167,17 +195,27 @@ class Parser():
             self.sinalizaErroSintatico('Esperado "defstatic", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def TipoPrimitivo(self):
-        # TipoPrimitivo -> bool | integer | String | double | void
+        noTP = No()
+        # TipoPrimitivo -> integer | double
         if (self.eat(Tag.KW_INTEGER) or self.eat(Tag.KW_DOUBLE)):
-            Ts.getToken(self.token.getLexema()).setTipo(Tag.NUMERICO)
+            noTP.setTipo(Tag.NUMERICO)
+            return noTP
+        # TipoPrimitivo -> String
         elif (self.eat(Tag.KW_STRING)):
-            Ts.getToken(self.token.getLexema()).setTipo(Tag.STRING)
+            noTP.setTipo(Tag.STRING)
+            return noTP
+        # TipoPrimitivo -> void
         elif (self.eat(Tag.KW_VOID)):
-            Ts.getToken(self.token.getLexema()).setTipo(Tag.TIPO_VAZIO)
+            noTP.setTipo(Tag.TIPO_VAZIO)
+            return noTP
+        # TipoPrimitivo -> bool
         elif (self.eat(Tag.KW_BOOL)):
-            Ts.getToken(self.token.getLexema()).setTipo(Tag.LOGICO)
+            noTP.setTipo(Tag.LOGICO)
+            return noTP
         else:
             self.sinalizaErroSintatico('Esperado "bool, integer, String, double, void", encontrado ' + '"' + self.token.getLexema() + '"')
+            noTP.setTipo(Tag.ERROR)
+            return noTP
 
     def ListaCmd(self):
         # ListaCmd -> ListaCmd’
@@ -192,6 +230,8 @@ class Parser():
             self.sinalizaErroSintatico('Esperado "if , write , while , id ", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def Cmd(self):
+        noCmd = No()
+        tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
         # Cmd -> CmdIF
         if (self.token.getNome() == Tag.KW_IF):
             self.CmdIf()
@@ -203,28 +243,43 @@ class Parser():
             self.CmdWrite()
         # Cmd -> ID CmdAtribFunc
         elif (self.eat(Tag.ID)):
-            self.CmdAtribFunc()
+            if (self.ts.getTipo(tempToken.getLexema()) == None):
+                self.sinalizaErroSemantico('ID não declarado')
+            noCmdAtribuiFunc = self.CmdAtribFunc()
+            if (noCmdAtribuiFunc.getTipo() != Tag.TIPO_VAZIO and self.ts.getTipo(tempToken.getLexema()) != noCmdAtribuiFunc.getTipo()):
+                self.sinalizaErroSemantico('Atribuição incompatível')
         else:
             self.sinalizaErroSintatico('Esperado "if , while , write , id", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def CmdAtribFunc(self):
+        noCmdAtribFunc = No()
         # CmdAtribFunc -> CmdAtribui
         if (self.token.getNome() == Tag.OP_ATR):
-            self.CmdAtribui()
+            noCmdAtribui = self.CmdAtribui()
+            noCmdAtribFunc.setTipo(noCmdAtribui.getTipo())
+            return noCmdAtribFunc
         # CmdAtribFunc -> CmdFuncao
         elif (self.token.getNome() == Tag.KW_OPN_PARENTH):
             self.CmdFuncao()
+            noCmdAtribFunc.setTipo(Tag.TIPO_VAZIO)
+            return noCmdAtribFunc
         else:
             self.sinalizaErroSintatico('Esperado "== , (", encontrado ' + '"' + self.token.getLexema() + '"')
+            noCmdAtribFunc.setTipo(Tag.ERROR)
+            return noCmdAtribFunc
 
     def CmdIf(self):
+        noCmdIf = No()
         #CmdIF -> if ( Expressao ) : ListaCmd CmdIF’
         if(self.eat(Tag.KW_IF)):
             if (not self.eat(Tag.KW_OPN_PARENTH)):
                 self.sinalizaErroSintatico('Esperado "(", encontrado ' + '"' + self.token.getLexema() + '"')
-            self.Expressao()
+            noExp = self.Expressao()
             if (not self.eat(Tag.KW_CLS_PARENTH)):
                 self.sinalizaErroSintatico('Esperado ")", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                if (noExp.getTipo() != Tag.LOGICO):
+                    self.sinalizaErroSemantico('Esperado "logico", encontrado' + '"' + self.token.getLexema() + '"')
             if (not self.eat(Tag.KW_DBL_SCORE)):
                 self.sinalizaErroSintatico('Esperado ":", encontrado ' + '"' + self.token.getLexema() + '"')
             self.ListaCmd()
@@ -251,13 +306,17 @@ class Parser():
 
 
     def CmdWhile(self):
+        noCmdWhile = No()
         # CmdWhile -> while ( Expressao ) : ListaCmd end ;
         if (self.eat(Tag.KW_WHILE)):
             if (not self.eat(Tag.KW_OPN_PARENTH)):
                 self.sinalizaErroSintatico('Esperado "(", encontrado ' + '"' + self.token.getLexema() + '"')
-            self.Expressao()
+            noExp = self.Expressao()
             if (not self.eat(Tag.KW_CLS_PARENTH)):
                 self.sinalizaErroSintatico('Esperado ")", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                if (noExp.getTipo() != Tag.LOGICO):
+                    self.sinalizaErroSemantico('Esperado "logico", encontrado' + '"' + self.token.getLexema() + '"')
             if (not self.eat(Tag.KW_DBL_SCORE)):
                 self.sinalizaErroSintatico('Esperado ":", encontrado ' + '"' + self.token.getLexema() + '"')
             self.ListaCmd()
@@ -269,26 +328,36 @@ class Parser():
             self.sinalizaErroSintatico('Esperado "while", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def CmdWrite(self):
+        noCmdWrite = No()
         # CmdWrite -> write ( Expressao ) ;
         if (self.eat(Tag.KW_WRITE)):
             if (not self.eat(Tag.KW_OPN_PARENTH)):
                 self.sinalizaErroSintatico('Esperado "(", encontrado ' + '"' + self.token.getLexema() + '"')
-            self.Expressao()
+            noExp = self.Expressao()
             if (not self.eat(Tag.KW_CLS_PARENTH)):
                 self.sinalizaErroSintatico('Esperado ")", encontrado ' + '"' + self.token.getLexema() + '"')
             if (not self.eat(Tag.KW_SCORE_COMMA)):
                 self.sinalizaErroSintatico('Esperado ";", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                if (noExp.getTipo() != Tag.STRING):
+                    self.sinalizaErroSemantico('Esperado "string", encontrado' + '"' + self.token.getLexema() + '"')
         else:
             self.sinalizaErroSintatico('Esperado "write", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def CmdAtribui(self):
+        noCmdAtribui = No()
         # CmdAtribui -> = Expressao ;
         if (self.eat(Tag.OP_ATR)):
-            self.Expressao()
+            noExp = self.Expressao()
             if (not self.eat(Tag.KW_SCORE_COMMA)):
                 self.sinalizaErroSintatico('Esperado ";", encontrado ' + '"' + self.token.getLexema() + '"')
+            else:
+                noCmdAtribui.setTipo(noExp.getTipo())
+                return noCmdAtribui
         else:
             self.sinalizaErroSintatico('Esperado "=", encontrado ' + '"' + self.token.getLexema() + '"')
+        noCmdAtribui.setTipo(Tag.ERROR)
+        return noCmdAtribui
 
     def CmdFuncao(self):
         # CmdFuncao -> ( RegexExp ) ;
@@ -320,77 +389,189 @@ class Parser():
             self.sinalizaErroSintatico('Esperado ",", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def Expressao(self):
+        noExp = No()
         # Expressao -> Exp1 Exp’
-        self.Exp1()
-        self.ExpLinha()
+        noExp1 = self.Exp1()
+        noExpLinha = self.ExpLinha()
+        if (noExpLinha.getTipo() == Tag.TIPO_VAZIO):
+            noExp.setTipo(noExp1.getTipo())
+        elif (noExpLinha.getTipo() == noExp1.getTipo() and noExpLinha.getTipo() == Tag.LOGICO):
+            noExp.setTipo(Tag.LOGICO)
+        else:
+            noExp.setTipo(Tag.ERROR)
+        return noExp
 
     def ExpLinha(self):
+        noExpLinha = No()
         # Exp’ -> or Exp1 Exp’ | #Exp’ -> and Exp1 Exp’
         if (self.eat(Tag.KW_OR) or self.eat(Tag.KW_AND)):
-            self.Exp1()
-            self.ExpLinha()
-        elif(self.token.getNome() not in (Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExp1 = self.Exp1()
+            noExpLinhaFilho = self.ExpLinha()
+            if (noExpLinhaFilho.getTipo() in (Tag.TIPO_VAZIO, noExp1.getTipo()) and noExp1.getTipo() == Tag.LOGICO):
+                noExpLinha.setTipo(Tag.LOGICO)
+            else:
+                noExpLinha.setTipo(Tag.ERROR)
+            return noExpLinha
+        elif (self.token.getNome() in (Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExpLinha.setTipo(Tag.TIPO_VAZIO)
+            return noExpLinha
+        else:
             self.sinalizaErroSintatico('Esperado "and, or", encontrado ' + '"' + self.token.getLexema() + '"')
+            noExpLinha.setTipo(Tag.ERROR)
+            return noExpLinha
 
     def Exp1(self):
+        noExp1 = No()
         # Exp1 -> Exp2 Exp1’
-        self.Exp2()
-        self.Exp1Linha()
+        noExp2 = self.Exp2()
+        noExp1Linha = self.Exp1Linha()
+        if (noExp1Linha.getTipo() == Tag.TIPO_VAZIO):
+            noExp1.setTipo(noExp2.getTipo())
+        elif (noExp1Linha.getTipo() == noExp2.getTipo() and noExp1Linha.getTipo() == Tag.NUMERICO):
+            noExp1.setTipo(Tag.LOGICO)
+        else:
+            noExp1.setTipo(Tag.ERROR)
+        return noExp1
+
 
     def Exp1Linha(self):
+        noExp1Linha = No()
         # Exp1’ -> < Exp2 Exp1’ | <= Exp2 Exp1’ | > Exp2 Exp1’ | >= Exp2 Exp1’ | == Exp2 Exp1’ | != Exp2 Exp1’
         if (self.eat(Tag.OP_LT) or self.eat(Tag.OP_LTE) or self.eat(Tag.OP_GT) or
                 self.eat(Tag.OP_GTE) or self.eat(Tag.OP_EQ) or self.eat(Tag.OP_NE)):
-            self.Exp2()
-            self.Exp1Linha()
-        elif (self.token.getNome() not in (Tag.KW_OR, Tag.KW_AND, Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExp2 = self.Exp2()
+            noExp1LinhaFilho = self.Exp1Linha()
+            if (noExp1LinhaFilho.getTipo() in (Tag.TIPO_VAZIO, noExp2.getTipo()) and noExp2.getTipo() == Tag.NUMERICO):
+                noExp1Linha.setTipo(Tag.NUMERICO)
+            else:
+                noExp1Linha.setTipo(Tag.ERROR)
+            return noExp1Linha
+        elif (self.token.getNome() in (Tag.KW_OR, Tag.KW_AND, Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExp1Linha.setTipo(Tag.TIPO_VAZIO)
+            return noExp1Linha
+        else:
             self.sinalizaErroSintatico('Esperado "< , <= , > , >= , == , !=", encontrado ' + '"' + self.token.getLexema() + '"')
+            noExp1Linha.setTipo(Tag.ERROR)
+            return noExp1Linha
 
     def Exp2(self):
+        noExp2 = No()
         # Exp2 -> Exp3 Exp2’
-        self.Exp3()
-        self.Exp2Linha()
+        noExp3 = self.Exp3()
+        noExp2Linha = self.Exp2Linha()
+        if (noExp2Linha.getTipo() == Tag.TIPO_VAZIO):
+            noExp2.setTipo(noExp3.getTipo())
+        elif (noExp2Linha.getTipo() == noExp3.getTipo() and noExp2Linha.getTipo() == Tag.NUMERICO):
+            noExp2.setTipo(Tag.NUMERICO)
+        else:
+            noExp2.setTipo(Tag.ERROR)
+        return noExp2
 
     def Exp2Linha(self):
+        noExp2Linha = No()
         # Exp2’ -> + Exp3 Exp2’ | - Exp3 Exp2’
         if(self.eat(Tag.OP_ADD) or self.eat(Tag.OP_SUB)):
-            self.Exp3()
-            self.Exp2Linha()
-        elif (self.token.getNome() not in (Tag.OP_LT, Tag.OP_LTE, Tag.OP_GT, Tag.OP_GTE, Tag.OP_EQ, Tag.OP_NE,
+            noExp3 = self.Exp3()
+            noExp2LinhaFilho = self.Exp2Linha()
+            if (noExp2LinhaFilho.getTipo() in (Tag.TIPO_VAZIO, noExp3.getTipo()) and noExp3.getTipo() == Tag.NUMERICO):
+                noExp2Linha.setTipo(Tag.NUMERICO)
+                return noExp2Linha
+            else:####
+                noExp2Linha.setTipo(Tag.ERROR)
+                return noExp2Linha
+        elif (self.token.getNome() in (Tag.OP_LT, Tag.OP_LTE, Tag.OP_GT, Tag.OP_GTE, Tag.OP_EQ, Tag.OP_NE,
                                            Tag.KW_OR, Tag.KW_AND, Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExp2Linha.setTipo(Tag.TIPO_VAZIO)
+            return noExp2Linha
+        else:
             self.sinalizaErroSintatico('Esperado "+ , -", encontrado ' + '"' + self.token.getLexema() + '"')
+            noExp2Linha.setTipo(Tag.ERROR)
+            return noExp2Linha
 
     def Exp3(self):
+        noExp3 = No()
         # Exp3 -> Exp4 Exp3’
-        self.Exp4()
-        self.Exp3Linha()
+        noExp4 = self.Exp4()
+        noExp3Linha = self.Exp3Linha()
+        if (noExp3Linha.getTipo() == Tag.TIPO_VAZIO):
+            noExp3.setTipo(noExp4.getTipo())
+        elif (noExp3Linha.getTipo() == noExp4.getTipo() and noExp3Linha.getTipo() == Tag.NUMERICO):
+            noExp3.setTipo(Tag.NUMERICO)
+        else:
+            noExp3.setTipo(Tag.ERROR)
+
+        return noExp3
 
     def Exp3Linha(self):
+        noExp3Linha = No()
         # Exp3’ -> * Exp4 Exp3’ | / Exp4 Exp3’
         if (self.eat(Tag.OP_MULT) or self.eat(Tag.OP_DIV)):
-            self.Exp4()
-            self.Exp3Linha()
-        elif (self.token.getNome() not in (Tag.OP_ADD, Tag.OP_SUB, Tag.OP_LT, Tag.OP_LTE, Tag.OP_GT, Tag.OP_GTE, Tag.OP_EQ,
-                                           Tag.OP_NE, Tag.KW_OR, Tag.KW_AND, Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExp4 = self.Exp4()
+            noExp3LinhaFilho = self.Exp3Linha()
+            if (noExp3LinhaFilho.getTipo() in (Tag.TIPO_VAZIO, noExp4.getTipo()) and noExp4.getTipo() == Tag.NUMERICO):
+                noExp3Linha.setTipo(Tag.NUMERICO)
+            else:
+                noExp3Linha.setTipo(Tag.ERROR)
+            return noExp3Linha
+        elif (self.token.getNome() in (Tag.OP_ADD, Tag.OP_SUB, Tag.OP_LT, Tag.OP_LTE, Tag.OP_GT, Tag.OP_GTE, Tag.OP_EQ,
+                                        Tag.OP_NE, Tag.KW_OR, Tag.KW_AND, Tag.KW_CLS_PARENTH, Tag.KW_SCORE_COMMA, Tag.KW_COMMA)):
+            noExp3Linha.setTipo(Tag.TIPO_VAZIO)
+            return noExp3Linha
+        else:
             self.sinalizaErroSintatico('Esperado "* , /", encontrado ' + '"' + self.token.getLexema() + '"')
+            noExp3Linha.setTipo(Tag.ERROR)
+            return noExp3Linha
 
     def Exp4(self):
+        noExp4 = No()
+        tempToken = Token(self.token.getNome(), self.token.getLexema(), self.token.getLinha(), self.token.getColuna())
+
         # Exp4 -> ID Exp4’
         if (self.eat(Tag.ID)):
             self.Exp4Linha()
+            noExp4.setTipo(tempToken.getTipo())
+            if (noExp4.getTipo() == Tag.TIPO_VAZIO):
+                noExp4.setTipo(Tag.ERROR)
+                self.sinalizaErroSemantico('ID não declarado')
+                return noExp4
+        # Exp4 -> ConstInteger | ConstDouble
+        elif (self.eat(Tag.INT) or self.eat(Tag.DOUBLE)):
+            noExp4.setTipo(Tag.NUMERICO)
+            return noExp4
+        # Exp4 -> ConstString
+        elif (self.eat(Tag.STRING)):
+            noExp4.setTipo(Tag.STRING)
+            return noExp4
+        # Exp4 -> ConstString
+        elif (self.eat(Tag.KW_TRUE) or self.eat(Tag.KW_FALSE)):
+            noExp4.setTipo(Tag.LOGICO)
+            return noExp4
         # Exp4 -> OpUnario Exp4
         elif (self.token.getNome() in (Tag.OP_UNAR, Tag.OP_NOT)):
-            self.OpUnario()
-            self.Exp4()
-        # Exp4 -> ( Expressao)
+            noUnario = self.OpUnario()
+            noExp4Filho = self.Exp4()
+            if (noExp4Filho.getTipo() == noUnario.getTipo() and noUnario.getTipo() == Tag.NUMERICO):
+                noExp4.setTipo(Tag.NUMERICO)
+            elif (noExp4Filho.getTipo() == noUnario.getTipo() and noUnario.getTipo() == Tag.LOGICO):
+                noExp4.setTipo(Tag.LOGICO)
+            else:
+                noExp4.setTipo(Tag.ERROR)
+            return noExp4
+        # Exp4 -> ( Expressao )
         elif (self.eat(Tag.KW_OPN_PARENTH)):
-            self.Expressao()
-            if(not self.eat(Tag.KW_CLS_PARENTH)):
+            noExp = self.Expressao()
+            if(self.eat(Tag.KW_CLS_PARENTH)):
+                noExp4.setTipo(noExp.getTipo())
+                return noExp4
+            else:
                 self.sinalizaErroSintatico('Esperado ")", encontrado ' + '"' + self.token.getLexema() + '"')
-        elif (not self.eat(Tag.INT) and not self.eat(Tag.DOUBLE) and not self.eat(Tag.STRING)
-              and not self.eat(Tag.KW_TRUE) and not self.eat(Tag.KW_FALSE)):
+                noExp4.setTipo(Tag.ERROR)
+                return noExp4
+        else:
             self.sinalizaErroSintatico('Esperado "ID , ConstInteger , ConstDouble , ConstString , true , false' +
                                        ' , - , ! , (", encontrado ' + '"' + self.token.getLexema() + '"')
+            noExp4.setTipo(Tag.ERROR)
+            return noExp4
 
     def Exp4Linha(self):
         # Exp4’ -> ( RegexExp )
@@ -404,6 +585,15 @@ class Parser():
             self.sinalizaErroSintatico('Esperado "(", encontrado ' + '"' + self.token.getLexema() + '"')
 
     def OpUnario(self):
+        noUnario = No()
         # OpUnario -> - | !
-        if(not self.eat(Tag.OP_NOT) and not self.eat(Tag.OP_UNAR)):
+        if (self.eat(Tag.OP_UNAR)):
+            noUnario.setTipo(Tag.NUMERICO)
+            return noUnario
+        elif(self.eat(Tag.OP_NOT)):
+            noUnario.setTipo(Tag.LOGICO)
+            return noUnario
+        else:
             self.sinalizaErroSintatico('Esperado "- , !", encontrado ' + '"' + self.token.getLexema() + '"')
+            noUnario.setTipo(Tag.ERROR)
+            return noUnario
